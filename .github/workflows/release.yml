@@ -14,7 +14,10 @@ jobs:
           - amd64
           - arm64
           - armv7
+          - armv6
+          - armv5
           - 386
+          - s390x
     runs-on: ubuntu-20.04
     steps:
       - name: Checkout repository
@@ -24,12 +27,12 @@ jobs:
         uses: actions/setup-go@v5
         with:
           cache: false
-          go-version: '1.22'
+          go-version-file: backend/go.mod
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: '20'
+          node-version: '22'
           registry-url: 'https://registry.npmjs.org'
           
       - name: Install dependencies
@@ -39,8 +42,14 @@ jobs:
             sudo apt install gcc-aarch64-linux-gnu
           elif [ "${{ matrix.platform }}" == "armv7" ]; then
             sudo apt install gcc-arm-linux-gnueabihf
+          elif [ "${{ matrix.platform }}" == "armv6" ]; then
+            sudo apt install gcc-arm-linux-gnueabihf
+          elif [ "${{ matrix.platform }}" == "armv5" ]; then
+            sudo apt install gcc-arm-linux-gnueabi
           elif [ "${{ matrix.platform }}" == "386" ]; then
             sudo apt install gcc-i686-linux-gnu
+          elif [ "${{ matrix.platform }}" == "s390x" ]; then
+            sudo apt install gcc-s390x-linux-gnu
           fi
 
       - name: Build frontend
@@ -63,33 +72,47 @@ jobs:
             export GOARCH=arm
             export GOARM=7
             export CC=arm-linux-gnueabihf-gcc
+          elif [ "${{ matrix.platform }}" == "armv6" ]; then
+            export GOARCH=arm
+            export GOARM=6
+            export CC=arm-linux-gnueabihf-gcc
+          elif [ "${{ matrix.platform }}" == "armv5" ]; then
+            export GOARCH=arm
+            export GOARM=5
+            export CC=arm-linux-gnueabi-gcc
           elif [ "${{ matrix.platform }}" == "386" ]; then
             export GOARCH=386
             export CC=i686-linux-gnu-gcc
+          elif [ "${{ matrix.platform }}" == "s390x" ]; then
+            export GOARCH=s390x
+            export CC=s390x-linux-gnu-gcc
           fi
 
           #### Build Sing-Box
-          git clone -b v1.8.5 https://github.com/SagerNet/sing-box
+          export VERSION=v1.10.1
+          git clone -b $VERSION https://github.com/SagerNet/sing-box
           cd sing-box
-          go build -tags with_v2ray_api,with_clash_api,with_grpc,with_quic,with_ech -o sing-box ./cmd/sing-box
+          go build -tags with_quic,with_grpc,with_wireguard,with_ech,with_utls,with_reality_server,with_acme,with_v2ray_api,with_clash_api,with_gvisor \
+          -v -trimpath -ldflags "-X 'github.com/sagernet/sing-box/constant.Version=${VERSION}' -s -w -buildid=" \
+          -o sing-box ./cmd/sing-box
           cd ..
 
           ### Build s-ui
           cd backend
           go build -o ../sui main.go
           cd ..
-          
+
           mkdir s-ui
           cp sui s-ui/
           cp s-ui.service s-ui/
           cp sing-box.service s-ui/
           mkdir s-ui/bin
           cp sing-box/sing-box s-ui/bin/
-          cp runSingbox.sh s-ui/bin/
-          
+          cp core/runSingbox.sh s-ui/bin/
+
       - name: Package
         run: tar -zcvf s-ui-linux-${{ matrix.platform }}.tar.gz s-ui
-        
+
       - name: Upload
         uses: svenstaro/upload-release-action@v2
         with:

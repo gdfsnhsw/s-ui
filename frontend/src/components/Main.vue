@@ -1,5 +1,11 @@
 <template>
-  <v-container class="fill-height">
+  <LogVue
+  v-model="logModal.visible"
+  :visible="logModal.visible"
+  :logType="logModal.logType"
+  @close="closeLogs"
+  />
+  <v-container class="fill-height" :loading="loading">
     <v-responsive :class="reloadItems.length>0 ? 'fill-height text-center' : 'align-center'" >
       <v-row class="d-flex align-center justify-center">
         <v-col cols="auto">
@@ -10,7 +16,7 @@
         <v-col cols="auto">
           <v-dialog v-model="menu" :close-on-content-click="false" transition="scale-transition" max-width="800">
             <template v-slot:activator="{ props }">
-              <v-btn v-bind="props" variant="tonal">{{ $t('main.tiles') }} <v-icon icon="mdi-star-plus" /></v-btn>
+              <v-btn v-bind="props" hide-details variant="tonal">{{ $t('main.tiles') }} <v-icon icon="mdi-star-plus" /></v-btn>
             </template>
             <v-card rounded="xl">
               <v-card-title>
@@ -45,9 +51,9 @@
       </v-row>
       <v-row>
         <v-col cols="12" sm="6" md="3" v-for="i in reloadItems" :key="i">
-          <v-card class="rounded-lg" variant="outlined" height="200px"
+          <v-card class="rounded-lg" variant="outlined" height="210px"
                   :title="menuItems.flatMap(cat => cat.value).find(m => m.value == i)?.title">
-            <v-card-text style="padding: 0 16px;">
+            <v-card-text style="padding: 0 16px;" align="center" justify="center">
               <Gauge :tilesData="tilesData" :type="i" v-if="i.charAt(0) == 'g'" />
               <History :tilesData="tilesData" :type="i" v-if="i.charAt(0) == 'h'" />
               <template v-if="i == 'i-sys'">
@@ -80,12 +86,18 @@
                   </v-col>
                   <v-col cols="3">S-UI</v-col>
                   <v-col cols="9">
-                    <v-chip density="compact" color="primary" variant="flat">
+                    <v-chip density="compact" color="blue">
                       <v-tooltip activator="parent" location="top">
                         {{ $t('main.info.threads') }}: {{ tilesData.sys?.appThreads }}<br />
                         {{ $t('main.info.memory') }}: {{ HumanReadable.sizeFormat(tilesData.sys?.appMem) }}
                       </v-tooltip>
                       v{{ tilesData.sys?.appVersion }}
+                    </v-chip>
+                    <v-chip density="compact" color="transparent" style="cursor: pointer;" @click="openLogs('s-ui')">
+                      <v-tooltip activator="parent" location="top">
+                        {{ $t('basic.log.title') + " - S-UI" }}
+                      </v-tooltip>
+                      <v-icon icon="mdi-list-box-outline" color="blue" />
                     </v-chip>
                   </v-col>
                   <v-col cols="3">{{ $t('main.info.uptime') }}</v-col>
@@ -97,7 +109,19 @@
                   <v-col cols="4">{{ $t('main.info.running') }}</v-col>
                   <v-col cols="8">
                     <v-chip density="compact" color="success" variant="flat" v-if="tilesData.sbd?.running">{{ $t('yes') }}</v-chip> 
-                    <v-chip density="compact" color="error" variant="flat" v-else>{{ $t('no') }}</v-chip> 
+                    <v-chip density="compact" color="error" variant="flat" v-else>{{ $t('no') }}</v-chip>
+                    <v-chip density="compact" color="transparent" style="cursor: pointer;" @click="openLogs('sing-box')">
+                      <v-tooltip activator="parent" location="top">
+                        {{ $t('basic.log.title') + " - Sing-Box" }}
+                      </v-tooltip>
+                      <v-icon icon="mdi-list-box-outline" :color="tilesData.sbd?.running ? 'success': 'error'" />
+                    </v-chip>
+                    <v-chip density="compact" color="transparent" v-if="tilesData.sbd?.running && !loading" style="cursor: pointer;" @click="restartSingbox()">
+                      <v-tooltip activator="parent" location="top">
+                        {{ $t('actions.restartSb') }}
+                      </v-tooltip>
+                      <v-icon icon="mdi-restart" color="warning" />
+                    </v-chip>
                   </v-col>
                   <v-col cols="4">{{ $t('main.info.memory') }}</v-col>
                   <v-col cols="8">
@@ -148,7 +172,9 @@ import Gauge from '@/components/tiles/Gauge.vue'
 import History from '@/components/tiles/History.vue'
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 import { i18n } from '@/locales'
+import LogVue from '@/layouts/modals/Logs.vue'
 
+const loading = ref(false)
 const menu = ref(false)
 const menuItems = [
   { title: i18n.global.t('main.gauges'), value: [
@@ -215,4 +241,25 @@ onMounted(() => {
 onBeforeUnmount(() => {
   stopTimer()
 })
+
+const logModal = ref({
+  visible: false,
+  logType: "s-ui"
+})
+
+const openLogs = (logType: string) => {
+  logModal.value.logType = logType
+  logModal.value.visible = true
+}
+
+const closeLogs = () => {
+  logModal.value.logType = "s-ui"
+  logModal.value.visible = false
+}
+
+const restartSingbox = async () => {
+  loading.value = true
+  await HttpUtils.post('api/restartSb',{})
+  loading.value = false
+}
 </script>
